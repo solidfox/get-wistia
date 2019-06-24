@@ -6,6 +6,7 @@
 // @description  Make all wistia videos downloadable on teachable courses
 // @author       You
 // @match        *://*.psychwire.com/*
+// @match        *://*.wistia.net/embed/iframe/*
 // @grant        GM_xmlhttpRequest
 // @require http://code.jquery.com/jquery-latest.js
 // @run-at       document-end
@@ -14,12 +15,43 @@
 (function() {
     'use strict';
 
-    function parseVideos() {
-        let viddivs = document.getElementsByClassName('attachment-wistia-player');
+    let regex = /fast\.wistia\.net\/embed\/iframe\/([\d\w]+)/g;
 
-        for (let temp of [0]) {
-            window.console.log($("head")[0].innerHTML);
-            let wistiaId = $("head")[0].innerHTML.match(/https\:\/\/fast\.wistia\.net\/embed\/iframe\/([\d\w]+)/)[1]
+    function getLocationBarWistiaId() {
+        let result = regex.exec(window.self.location.href);
+        if (result && result.length > 1) {
+            return result[1];
+        }
+    }
+
+    function parseVideos() {
+        let ids = regex.exec($("html")[0].innerHTML);
+        ids = ids ? ids.filter((str) => !(str.startsWith("fast.wistia.net"))) : [];
+
+        let locationBarWistiaId = getLocationBarWistiaId();
+        if (locationBarWistiaId) {
+            ids.push(locationBarWistiaId);
+        }
+
+        console.log(ids);
+
+        let wrapper = document.createElement('div');
+        wrapper.id = "comSchlaugDownloadwindow";
+        wrapper.style.backgroundColor = 'rgba(0,0,0,0.90)';
+        wrapper.style.color = 'white';
+        wrapper.style.borderRadius = '5px';
+        wrapper.style.padding = '5px';
+        wrapper.style.position = 'fixed';
+        wrapper.style.bottom = '40px';
+        wrapper.style.left = '10px';
+        wrapper.style.display = 'flex';
+        wrapper.style.flexDirection = 'row';
+        wrapper.style.alignItems = 'flexStart';
+        wrapper.style.overflow = 'scroll';
+        wrapper.style.zIndex = '100000000000000';
+
+        for (let id of ids) {
+            let wistiaId = id;
 
             GM_xmlhttpRequest({
                 method: 'GET',
@@ -37,15 +69,7 @@
                         let allvids = JSON.parse(assets[1]);
                         console.log(allvids);
                         let newNode = document.createElement('div');
-                        newNode.id = "comSchlaugDownloadwindow";
-                        newNode.style.backgroundColor = 'rgba(0,0,0,0.95)';
-                        newNode.style.color = 'white';
-                        newNode.style.borderRadius = '5px';
-                        newNode.style.padding = '10px';
-                        newNode.style.position = 'fixed';
-                        newNode.style.bottom = '40px';
-                        newNode.style.left = '10px';
-                        let str = "<ul>";
+                        let str = "<h4>" + id + "</h4><ul style='padding:5px;'>";
                         for (let vid of allvids) {
                             if (vid.type != 'hls_video' && vid.public) {
                                 str += '<li style="padding:3px; display:flex; flex-direction:row; justify-content:space-between;"><div>' + vid.display_name + ' (' + vid.width + 'x' + vid.height + ', ' + vid.ext + '):</div><div style="padding-left:10px;"><a href="' + vid.url + '" target="_blank">' + formatBytes(vid.size) + '</a></div></li>';
@@ -53,7 +77,7 @@
                         }
                         str += "</ul>";
                         newNode.innerHTML = str;
-                        $("body").append(newNode)
+                        wrapper.appendChild(newNode);
                     }
                     else {
                         console.error('wista returned invalid data', body);
@@ -61,6 +85,7 @@
                 }
             });
         }
+        window.self.document.body.append(wrapper);
     }
 
     // thanks to https://stackoverflow.com/a/18650828/102720
@@ -80,7 +105,7 @@
 
     // window.addEventListener('lecture:ajax_success', parseVideos);
     $('body').append('<div id="CP"><input id="comSchlaugDownload" type="button" value="Download video"><input id="comSchlaugClose" type="button" value="Close"></div>')
-    $("#CP").css("position", "fixed").css("bottom", 10).css("left", 10);
+    $("#CP").css("position", "fixed").css("bottom", 10).css("left", 10).css("z-index", 100000);
     $('#comSchlaugDownload').click(parseVideos);
     $('#comSchlaugClose').click(function () {$("#comSchlaugDownloadwindow").remove()});
 })();
